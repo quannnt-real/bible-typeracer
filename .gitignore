@@ -8,3 +8,7 @@ node_modules
 dist
 .DS_Store
 .env
+
+# Database files
+server/db/*.sqlite
+server/db/*.db

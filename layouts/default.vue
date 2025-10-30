@@ -78,7 +78,7 @@
           </nav>
 
           <a 
-            href="https://github.com/Tchoupinax/typing-racing" 
+            href="https://github.com/quannnt-real/bible-typeracer" 
             target="_blank" 
             class="flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors"
           >

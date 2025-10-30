@@ -11,8 +11,6 @@ type Body = {
   text: string;
 }
 
-const db = createKysely<Database>();
-
 export default defineEventHandler(async (request) => {
   const body = await readRawBody(request)
   if (!body) {
@@ -34,6 +32,7 @@ export default defineEventHandler(async (request) => {
 })
 
 async function computeReponse(data: Body) {
+  const db = createKysely<Database>();
   await db
     .insertInto('texts')
     .values({

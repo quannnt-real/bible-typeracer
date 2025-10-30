@@ -1,31 +1,12 @@
 import { defineEventHandler } from 'h3'
-import { createKysely } from '@vercel/postgres-kysely';
-import { Database } from '../../types/database';
-import { match } from 'ts-pattern';
+import { getTopRankings } from '../../utils/rankings-db';
  
-const db = createKysely<Database>();
-
 export default defineEventHandler(async () => {
-  return match(process.env.NODE_ENV)
-    .with('production', () => computeReponse())
-    .otherwise(() => computeFakeResponse())
+  try {
+    const rankings = await getTopRankings(20);
+    return rankings;
+  } catch (error) {
+    console.error('Error fetching rankings:', error);
+    return [];
+  }
 })
-
-async function computeReponse() {
-  const rows = await db
-  .selectFrom('scores')
-  .select(["nickname", "score_wpm"])
-  .limit(20)
-  .orderBy('score_wpm', 'desc')
-  .execute();
-
-  return rows
-}
-
-function computeFakeResponse() {
-  return [
-    { nickname: "Fake 1", score_wpm: 23 },
-    { nickname: "Fake 2", score_wpm: 13 },
-    { nickname: "Fake 3", score_wpm: 3 },
-  ]
-}

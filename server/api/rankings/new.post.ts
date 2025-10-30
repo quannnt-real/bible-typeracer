@@ -1,53 +1,33 @@
 import { defineEventHandler, readRawBody } from 'h3'
-import { createKysely } from '@vercel/postgres-kysely';
-import { Database } from '../../types/database';
+import { insertRanking } from '../../utils/rankings-db';
 import { randomUUID } from 'crypto';
-import { match } from 'ts-pattern';
+import { getCurrentUser } from '../../utils/auth';
  
 type Body = {
   nickname: string;
   score_wpm: number;
 }
 
-const db = createKysely<Database>();
-
-export default defineEventHandler(async (request) => {
-  const body = await readRawBody(request)
+export default defineEventHandler(async (event) => {
+  const body = await readRawBody(event)
   if (!body) {
     return "FALSE"
   }
 
   const data = JSON.parse(body);
-  if (!data.nickname && !data.score_wpm) {
+  if (!data.nickname || !data.score_wpm) {
     return "FALSE";
   }
 
-  return match(process.env.NODE_ENV)
-  .with('production', () => computeReponse(data))
-  .otherwise(() => computeFakeResponse(data))
+  try {
+    // Lấy user hiện tại (nếu có)
+    const user = await getCurrentUser(event);
+    const userId = user?.id;
+
+    await insertRanking(randomUUID(), data.nickname, data.score_wpm, userId);
+    return 'OK';
+  } catch (error) {
+    console.error('Error inserting ranking:', error);
+    return 'FALSE';
+  }
 })
-
-async function computeReponse(data: Body) {
-  await db
-    .insertInto('scores')
-    .values({
-      id: randomUUID(),
-      nickname: data.nickname,
-      score_wpm: data.score_wpm,
-      created_at: new Date(),
-    })
-    .executeTakeFirst()
-  
-  return 'OK'
-}
-
-function computeFakeResponse(data: Body) {
-  console.log('inserted score');
-  console.log({
-    id: randomUUID(),
-    nickname: data.nickname,
-    score_wpm: data.score_wpm,
-    created_at: new Date(),
-  })
-  return 'OK'
-}

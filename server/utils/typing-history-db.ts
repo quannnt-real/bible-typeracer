@@ -88,11 +88,11 @@ export interface TypingHistory {
   chapter: number;
   verse_start: number | null;
   verse_end: number | null;
-  text_content: string;
   times_typed: number;
   user_id: string | null;
   last_typed_at: string;
   created_at: string;
+  best_wpm: number;
 }
 
 /**
@@ -145,19 +145,23 @@ export async function recordTypingHistory(
   id: string,
   bookId: number,
   chapter: number,
-  textContent: string,
   userId?: string,
   verseStart?: number,
-  verseEnd?: number
+  verseEnd?: number,
+  wpm?: number
 ): Promise<void> {
   // Kiểm tra xem đã tồn tại chưa
   const existing = await checkTypingHistory(bookId, chapter, userId, verseStart, verseEnd);
   
   if (existing.exists && existing.history) {
-    // Cập nhật số lần gõ
+    // Cập nhật số lần gõ và best_wpm nếu cao hơn
+    const currentBestWpm = existing.history.best_wpm || 0;
+    const newBestWpm = wpm && wpm > currentBestWpm ? wpm : currentBestWpm;
+    
     const sql = `UPDATE typing_history 
                  SET times_typed = ${existing.count + 1}, 
-                     last_typed_at = datetime('now')
+                     last_typed_at = datetime('now'),
+                     best_wpm = ${newBestWpm}
                  WHERE id = '${existing.history.id}'`;
     await executeTypingHistoryCommand(sql);
   } else {
@@ -165,10 +169,10 @@ export async function recordTypingHistory(
     const verseStartValue = verseStart !== undefined && verseStart !== null ? verseStart : 'NULL';
     const verseEndValue = verseEnd !== undefined && verseEnd !== null ? verseEnd : 'NULL';
     const userIdValue = userId ? `'${userId}'` : 'NULL';
-    const escapedText = textContent.replace(/'/g, "''");
+    const wpmValue = wpm || 0;
     
-    const sql = `INSERT INTO typing_history(id, book_id, chapter, verse_start, verse_end, text_content, times_typed, user_id)
-                 VALUES('${id}', ${bookId}, ${chapter}, ${verseStartValue}, ${verseEndValue}, '${escapedText}', 1, ${userIdValue})`;
+    const sql = `INSERT INTO typing_history(id, book_id, chapter, verse_start, verse_end, times_typed, user_id, best_wpm)
+                 VALUES('${id}', ${bookId}, ${chapter}, ${verseStartValue}, ${verseEndValue}, 1, ${userIdValue}, ${wpmValue})`;
     await executeTypingHistoryCommand(sql);
   }
 }

@@ -6,9 +6,9 @@ import { getCurrentUser } from '../../utils/auth';
 type Body = {
   bookId: number;
   chapter: number;
-  textContent: string;
   verseStart?: number;
   verseEnd?: number;
+  wpm?: number;
 }
 
 export default defineEventHandler(async (event) => {
@@ -18,7 +18,10 @@ export default defineEventHandler(async (event) => {
   }
 
   const data: Body = JSON.parse(body);
-  if (!data.bookId || !data.chapter || !data.textContent) {
+  console.log('[TYPING-HISTORY] Received data:', data);
+  console.log('[TYPING-HISTORY] WPM:', data.wpm);
+  
+  if (!data.bookId || !data.chapter) {
     return "FALSE";
   }
 
@@ -31,10 +34,10 @@ export default defineEventHandler(async (event) => {
       randomUUID(),
       data.bookId,
       data.chapter,
-      data.textContent,
       userId,
       data.verseStart,
-      data.verseEnd
+      data.verseEnd,
+      data.wpm
     );
     return 'OK';
   } catch (error) {

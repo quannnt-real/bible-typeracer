@@ -41,10 +41,12 @@
         <!-- Text Display Card -->
         <div class="bg-white rounded-2xl shadow-game p-8 border border-gray-100">
           <div
+            id="text-display"
             v-if="text.length > 0"
-            class="text-2xl leading-relaxed whitespace-pre-wrap"
+            class="text-2xl leading-relaxed whitespace-pre-wrap max-h-96 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100"
+            ref="textDisplay"
           >
-            <span class="text-green-600 font-semibold">{{ previousText }}</span><span class="bg-blue-100 px-1 rounded">
+            <span class="text-green-600 font-semibold">{{ previousText }}</span><span class="bg-blue-100 px-1 rounded" ref="currentWordHighlight">
               <span class="text-green-600 font-semibold">{{ currentWordTypedPart }}</span><span class="text-gray-900 font-bold">{{ currentWordStayingPart }}</span>
             </span><span class="text-gray-800">{{ followingText }}</span>
           </div>
@@ -362,6 +364,13 @@ export default {
         // Đúng
         this.validWrittenText = trimmedInput;
         this.invalidWrittenText = "";
+        
+        // Kiểm tra nếu đã gõ đúng từ cuối cùng - complete ngay lập tức
+        if (trimmedInput === expectedWord && this.wordIndexPassed === this.textTokens.length - 1) {
+          this.wordIndexPassed++;
+          this.handleCompletion();
+          return;
+        }
       } else {
         // Sai
         this.validWrittenText = "";
@@ -370,6 +379,9 @@ export default {
       
       // Update progress
       this.updateProgress();
+      
+      // Auto-scroll khi cần
+      this.autoScrollToCurrentWord();
     },
     updateProgress() {
       const percentage = Math.floor((this.previousText.length + this.validWrittenText.length) / this.text.length * 100);
@@ -377,6 +389,30 @@ export default {
       const barElement = document.getElementById('bar');
       if (barElement) {
         barElement.style.width = percentage + "%";
+      }
+    },
+    autoScrollToCurrentWord() {
+      // Tìm element highlight hiện tại
+      const highlightElement = document.querySelector('.bg-blue-100');
+      const textDisplay = document.getElementById('text-display');
+      
+      if (highlightElement && textDisplay) {
+        // Lấy vị trí của highlight element
+        const highlightRect = highlightElement.getBoundingClientRect();
+        const containerRect = textDisplay.getBoundingClientRect();
+        
+        // Tính vị trí tương đối trong container
+        const relativeTop = highlightRect.top - containerRect.top;
+        const containerHeight = containerRect.height;
+        
+        // Nếu highlight nằm ở nửa dưới của container, scroll để đưa nó lên giữa
+        if (relativeTop > containerHeight * 0.6) {
+          const scrollAmount = relativeTop - containerHeight * 0.4;
+          textDisplay.scrollBy({
+            top: scrollAmount,
+            behavior: 'smooth'
+          });
+        }
       }
     },
     handleCompletion() {
@@ -387,31 +423,39 @@ export default {
         const wordCount = this.textTokens.filter(t => t !== '\n').length;
         const wpm = Math.floor(wordCount / (duration / 60))
         
-        // Nếu đã đăng nhập - lưu score và history
+        // Nếu đã đăng nhập - lưu score và history đồng bộ
         if (this.isAuthenticated) {
           const nickname = this.user?.display_name || this.user?.username || 'Anonymous'
 
-          // Lưu ranking
-          await $fetch('/api/rankings/new', {
-            method: "POST",
-            body: { nickname, score_wpm: wpm }
-          });
-
-          // Lưu lịch sử gõ
-          if (this.currentSelection) {
-            const verseStart = this.currentSelection.verseStart || 1;
-            const verseEnd = this.currentSelection.verseEnd || this.currentSelection.verseCount;
-            
-            await $fetch('/api/typing-history/record', {
+          try {
+            // Lưu ranking trước
+            await $fetch('/api/rankings/new', {
               method: "POST",
-              body: {
-                bookId: this.currentSelection.bookId,
-                chapter: this.currentSelection.chapter,
-                verseStart: verseStart,
-                verseEnd: verseEnd,
-                textContent: this.text
-              }
+              body: { nickname, score_wpm: wpm }
             });
+            console.log('✅ Ranking saved successfully');
+
+            // Sau đó lưu typing history (luôn có currentSelection khi gõ Bible)
+            if (this.currentSelection) {
+              const verseStart = this.currentSelection.verseStart || 1;
+              const verseEnd = this.currentSelection.verseEnd || this.currentSelection.verseCount;
+
+              await $fetch('/api/typing-history/record', {
+                method: "POST",
+                body: {
+                  bookId: this.currentSelection.bookId,
+                  chapter: this.currentSelection.chapter,
+                  verseStart: verseStart,
+                  verseEnd: verseEnd,
+                  wpm: wpm
+                }
+              });
+              console.log('✅ Typing history saved successfully');
+            } else {
+              console.warn('⚠️  No currentSelection - typing history not saved');
+            }
+          } catch (error) {
+            console.error('❌ Error saving data:', error);
           }
 
           alert(`Hoàn thành trong ${duration} giây (${wpm} WPM)! Tuyệt vời! 🎉\n\nĐiểm số đã được lưu!`)
@@ -449,10 +493,38 @@ export default {
       this.progressionPercentage = 0;
       this.finished = false;
       this.started = false;
+      // Không reset gameStarted để giữ trạng thái
       this.gameStarted = false;
       this.bibleReference = '';
+      // Không reset currentSelection để lưu typing-history
       this.currentSelection = null;
     }
   }
 }
 </script>
+
+<style scoped>
+/* Custom scrollbar cho text display */
+.scrollbar-thin {
+  scrollbar-width: thin;
+  scrollbar-color: #d1d5db #f9fafb;
+}
+
+.scrollbar-thin::-webkit-scrollbar {
+  width: 6px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-track {
+  background: #f9fafb;
+  border-radius: 3px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background: #d1d5db;
+  border-radius: 3px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb:hover {
+  background: #9ca3af;
+}
+</style>

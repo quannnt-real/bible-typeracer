@@ -33,7 +33,8 @@
             <th scope="col" class="px-6 py-3">Sách</th>
             <th scope="col" class="px-6 py-3">Chương</th>
             <th scope="col" class="px-6 py-3">Câu</th>
-            <th scope="col" class="px-6 py-3">Số lần gõ</th>
+            <!-- <th scope="col" class="px-6 py-3">Số lần gõ</th> -->
+            <th scope="col" class="px-6 py-3" title="Words Per Minute - Số từ gõ được mỗi phút">WPM</th>
             <th scope="col" class="px-6 py-3">Lần gõ cuối</th>
             <th scope="col" class="px-6 py-3">Nội dung</th>
           </tr>
@@ -55,14 +56,20 @@
               </span>
               <span v-else>{{ item.verse_start }}</span>
             </td>
-            <td class="px-6 py-4">
+            <!-- <td class="px-6 py-4">
               <span class="px-2 py-1 text-xs font-semibold text-blue-800 bg-blue-200 rounded-full">
                 {{ item.times_typed }}
               </span>
+            </td> -->
+            <td class="px-6 py-4">
+              <span class="px-2 py-1 text-xs font-semibold text-green-800 bg-green-200 rounded-full" 
+                    :title="'Words Per Minute: ' + (item.best_wpm || 0) + ' từ/phút - Tốc độ gõ cao nhất cho đoạn này'">
+                {{ item.best_wpm || 0 }} WPM
+              </span>
             </td>
             <td class="px-6 py-4">{{ formatDate(item.last_typed_at) }}</td>
-            <td class="px-6 py-4 max-w-xs truncate" :title="item.text_content">
-              {{ item.text_content }}
+            <td class="px-6 py-4 max-w-xs truncate" :title="getCachedText(item)">
+              {{ getCachedText(item) }}
             </td>
           </tr>
         </tbody>
@@ -86,10 +93,10 @@ type TypingHistoryItem = {
   chapter: number;
   verse_start: number | null;
   verse_end: number | null;
-  text_content: string;
   times_typed: number;
   last_typed_at: string;
   created_at: string;
+  best_wpm: number;
 }
 
 type Stats = {
@@ -102,6 +109,7 @@ type State = {
   history: TypingHistoryItem[];
   stats: Stats;
   books: any[];
+  textCache: Map<string, string>;
 }
 
 export default {
@@ -112,7 +120,8 @@ export default {
         totalTexts: 0,
         totalTypings: 0
       },
-      books: []
+      books: [],
+      textCache: new Map()
     }
   },
   mounted() {
@@ -133,6 +142,11 @@ export default {
       try {
         const data = await $fetch('/api/typing-history/recent');
         this.history = data;
+        
+        // Load text content for all history items one by one to avoid overwhelming
+        for (const item of this.history) {
+          await this.loadTextContent(item);
+        }
       } catch (error) {
         console.error('Error fetching history:', error);
       }
@@ -163,6 +177,44 @@ export default {
         hour: '2-digit',
         minute: '2-digit'
       });
+    },
+    getCachedText(item: TypingHistoryItem): string {
+      const cacheKey = `${item.book_id}-${item.chapter}-${item.verse_start || 'null'}-${item.verse_end || 'null'}`;
+      return this.textCache.get(cacheKey) || 'Đang tải...';
+    },
+    async loadTextContent(item: TypingHistoryItem) {
+      const cacheKey = `${item.book_id}-${item.chapter}-${item.verse_start || 'null'}-${item.verse_end || 'null'}`;
+      
+      // Skip if already cached
+      if (this.textCache.has(cacheKey)) {
+        return;
+      }
+      
+      try {
+        // Build query string manually to avoid issues
+        let url = `/api/bible/verses?bookId=${item.book_id}&chapter=${item.chapter}&format=text`;
+        
+        if (item.verse_start) {
+          url += `&verseStart=${item.verse_start}`;
+        }
+        if (item.verse_end) {
+          url += `&verseEnd=${item.verse_end}`;
+        }
+        
+        console.log('Fetching text from:', url);
+        const response = await fetch(url);
+        const data = await response.json();
+        console.log('API response:', data);
+        
+        const text = data.text || 'Không thể tải nội dung';
+        
+        // Cache the result
+        this.textCache.set(cacheKey, text);
+        console.log('Cached text for', cacheKey, ':', text);
+      } catch (error) {
+        console.error('Error fetching text content:', error);
+        this.textCache.set(cacheKey, 'Lỗi khi tải nội dung');
+      }
     }
   }
 }

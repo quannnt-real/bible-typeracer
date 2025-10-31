@@ -12,3 +12,7 @@ dist
 # Database files
 server/db/*.sqlite
 server/db/*.db
+
+# Test files
+test-*.js
+*.test.js

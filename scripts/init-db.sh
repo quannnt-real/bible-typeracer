@@ -34,6 +34,9 @@ if [ ! -f "server/db/users.sqlite" ]; then
     echo "Creating users database..."
     sqlite3 server/db/users.sqlite < server/migrations/06-users.sql
     sqlite3 server/db/users.sqlite < server/migrations/10-create-user-progress.sql
+    sqlite3 server/db/users.sqlite < server/migrations/11-add-progress-percentage.sql
+    sqlite3 server/db/users.sqlite < server/migrations/12-add-text-length.sql
+    sqlite3 server/db/users.sqlite < server/migrations/13-add-car.sql
     echo "✅ Users database created with all migrations"
 else
     echo "⚠️  Users database already exists"

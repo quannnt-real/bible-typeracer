@@ -95,16 +95,27 @@
           </div>
 
           <!-- Progress Bar -->
-          <div class="relative h-8 bg-gray-200 rounded-full overflow-hidden shadow-inner">
+          <div class="relative h-24 bg-gradient-to-b from-sky-300 to-sky-500 rounded-lg shadow-inner border-2 border-gray-400">
+            <!-- Road -->
+            <div class="absolute bottom-0 left-0 right-0 h-12 bg-gray-600"></div>
+            <!-- Finish Line -->
+            <div class="absolute right-0 top-0 bottom-0 w-1 bg-white border-l-4 border-dashed border-black z-5"></div>
+            <!-- Car Image -->
             <div 
-              id="bar" 
-              class="h-full bg-gradient-to-r from-accent-400 via-primary-500 to-secondary-500 transition-all duration-300 ease-out relative overflow-hidden"
-              style="width: 0%"
+              class="absolute bottom-4 h-auto flex items-end transition-all ease-out z-10"
+              :style="{ left: progressionPercentage + '%', transitionDuration: carSpeed + 'ms' }"
             >
-              <div class="absolute inset-0 bg-white opacity-20 animate-pulse"></div>
+              <img 
+                :src="'/car/' + (user?.car || 'car-icon.svg')" 
+                :class="[
+                  'w-36 flex-shrink-0',
+                  (user?.car || 'car-icon.svg') === 'car-icon.svg' ? 'transform scale-x-[-1]' : ''
+                ]"
+                alt="Car"
+              />
             </div>
-            <div class="absolute inset-0 flex items-center justify-center">
-              <span class="text-sm font-bold text-gray-700 drop-shadow">
+            <div class="absolute inset-0 flex items-center justify-center z-20">
+              <span class="text-sm font-bold text-white drop-shadow">
                 {{ progressionPercentage }}%
               </span>
             </div>
@@ -270,6 +281,8 @@ type State = {
   progressData: any;
   autoSaveInterval: any;
   showResumeDialog: boolean;
+  carSpeed: number;
+  lastInputTime: number;
 }
 
 export default {
@@ -305,6 +318,8 @@ export default {
       notificationTitle: '',
       notificationMessage: '',
       notificationType: 'info', // 'success', 'error', 'info'
+      carSpeed: 300, // ms
+      lastInputTime: Date.now(),
     }
   },
   computed: {
@@ -789,6 +804,17 @@ export default {
         .replace(/ +/g, ' ')              // Multiple spaces -> single space (không touch newline)
     },
     async startWithBible(selection) {
+      // Reset game state
+      this.carSpeed = 300;
+      this.lastInputTime = Date.now();
+      this.progressionPercentage = 0;
+      this.wordIndexPassed = 0;
+      this.writtenText = "";
+      this.validWrittenText = "";
+      this.invalidWrittenText = "";
+      this.started = false;
+      this.finished = false;
+      
       // Không cần check authentication nữa - cho phép guest mode
       this.gameStarted = true;
       this.bibleReference = selection.reference;
@@ -814,6 +840,14 @@ export default {
       }
     },
     handleInput($e) {
+      // Tính tốc độ gõ
+      const now = Date.now();
+      const timeDiff = now - this.lastInputTime;
+      this.lastInputTime = now;
+      
+      // Nếu gõ nhanh (< 200ms), xe chạy nhanh (100ms); chậm thì 500ms
+      this.carSpeed = timeDiff < 200 ? 100 : 500;
+      
       // Bắt đầu timer
       if (!this.started) {
         this.started = true;
@@ -1044,9 +1078,7 @@ export default {
         }
         
         // Hỏi có muốn chơi lại không
-        if (confirm('Bạn có muốn chơi lại không?')) {
           this.resetGame();
-        }
       }, 1)
     },
     async fetchText() {

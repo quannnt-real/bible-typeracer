@@ -67,23 +67,26 @@
 
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">
-              Màu đại diện
+              Xe đua
             </label>
-            <div class="flex gap-2">
-              <input 
-                v-model="form.color" 
-                type="color" 
-                class="h-10 w-20 border border-gray-300 rounded-md cursor-pointer"
-              >
-              <input 
-                v-model="form.color" 
-                type="text" 
-                pattern="^#[0-9A-Fa-f]{6}$"
-                class="flex-1 p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                placeholder="#3B82F6"
-              >
-            </div>
-            <p class="mt-1 text-xs text-gray-500">Màu này sẽ hiển thị khi chơi multiplayer</p>
+            <button
+              @click="showCarSelector = true"
+              type="button"
+              class="flex items-center gap-3 p-3 border border-gray-300 rounded-md hover:bg-gray-50 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            >
+              <img 
+                :src="'/car/' + form.car" 
+                :class="[
+                  'w-12 h-12 object-contain',
+                  form.car === 'car-icon.svg' ? 'transform scale-x-[-1]' : ''
+                ]"
+                :alt="'Selected car'"
+              />
+              <svg class="w-5 h-5 text-gray-400 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+              </svg>
+            </button>
+            <p class="mt-1 text-xs text-gray-500">Chọn xe đua của bạn</p>
           </div>
 
           <div class="flex gap-3">
@@ -113,6 +116,50 @@
           </NuxtLink>
         </div>
       </div>
+
+      <!-- Car Selector Modal -->
+      <div v-if="showCarSelector" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" @click="showCarSelector = false">
+        <div class="bg-white rounded-lg p-6 max-w-4xl w-full mx-4 max-h-[80vh] overflow-y-auto" @click.stop>
+          <div class="flex justify-between items-center mb-4">
+            <h3 class="text-lg font-semibold text-gray-800">Chọn xe đua</h3>
+            <button @click="showCarSelector = false" class="text-gray-400 hover:text-gray-600">
+              <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+              </svg>
+            </button>
+          </div>
+          
+          <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+            <button
+              v-for="car in availableCars"
+              :key="car.value"
+              @click="selectCar(car.value)"
+              :class="[
+                'flex justify-center items-center p-4 border-2 rounded-lg hover:border-blue-500 transition-colors',
+                form.car === car.value ? 'border-blue-500 bg-blue-50' : 'border-gray-200'
+              ]"
+            >
+              <img 
+                :src="'/car/' + car.value" 
+                :class="[
+                  'w-20 h-20 object-contain',
+                  car.value === 'car-icon.svg' ? 'transform scale-x-[-1]' : ''
+                ]"
+                :alt="car.label"
+              />
+            </button>
+          </div>
+          
+          <div class="flex justify-end mt-6">
+            <button 
+              @click="showCarSelector = false"
+              class="px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300"
+            >
+              Đóng
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 </template>
@@ -126,12 +173,50 @@ const { user, fetchUser } = useAuth()
 const form = ref({
   display_name: '',
   avatar_url: '',
-  color: '#3B82F6'
+  car: 'car-icon.svg'
 })
 
 const loading = ref(false)
 const successMessage = ref('')
 const errorMessage = ref('')
+const showCarSelector = ref(false)
+
+const availableCars = [
+  { value: 'car-icon.svg', label: 'Car Icon (Mặc định)' },
+  { value: 'biteracer.svg', label: 'Bite Racer' },
+  { value: 'candycane_free.svg', label: 'Candy Cane' },
+  { value: 'candycorn_free.svg', label: 'Candy Corn' },
+  { value: 'fall_2023_acorn-free.svg', label: 'Fall Acorn' },
+  { value: 'fall_2023_fallcar-free.svg', label: 'Fall Car' },
+  { value: 'fall_2023_falltruck-free.svg', label: 'Fall Truck' },
+  { value: 'free-rocketship.svg', label: 'Rocket Ship' },
+  { value: 'lunar-basic-design-free.svg', label: 'Lunar Basic' },
+  { value: 'lunar-basic-tiger-free.svg', label: 'Lunar Tiger' },
+  { value: 'lunar-drag-gold.svg', label: 'Lunar Drag Gold' },
+  { value: 'lunar-drag-red.svg', label: 'Lunar Drag Red' },
+  { value: 'lunar-drag-tiger.svg', label: 'Lunar Drag Tiger' },
+  { value: 'mindracerEmoji-free.svg', label: 'Mind Racer Emoji' },
+  { value: 'penguins-typingstats_free.svg', label: 'Penguins' },
+  { value: 'premium-drag-blue.svg', label: 'Premium Drag Blue' },
+  { value: 'premium-drag-fire.svg', label: 'Premium Drag Fire' },
+  { value: 'premium-drag-green.svg', label: 'Premium Drag Green' },
+  { value: 'premium-drag-pink.svg', label: 'Premium Drag Pink' },
+  { value: 'premium-drag-red.svg', label: 'Premium Drag Red' },
+  { value: 'premium-drag-water.svg', label: 'Premium Drag Water' },
+  { value: 'premium-earth.svg', label: 'Premium Earth' },
+  { value: 'premium-fire.svg', label: 'Premium Fire' },
+  { value: 'spring-flowers2-free.svg', label: 'Spring Flowers' }
+]
+
+function getCarDisplayName(carValue: string): string {
+  const car = availableCars.find(c => c.value === carValue)
+  return car ? car.label : 'Car Icon (Mặc định)'
+}
+
+function selectCar(carValue: string) {
+  form.value.car = carValue
+  showCarSelector.value = false
+}
 
 onMounted(async () => {
   await fetchUser()
@@ -139,7 +224,7 @@ onMounted(async () => {
   if (user.value) {
     form.value.display_name = user.value.display_name || ''
     form.value.avatar_url = user.value.avatar_url || ''
-    form.value.color = user.value.color || '#3B82F6'
+    form.value.car = user.value.car || 'car-icon.svg'
   }
 })
 
@@ -154,7 +239,7 @@ async function updateProfile() {
       body: {
         display_name: form.value.display_name,
         avatar_url: form.value.avatar_url,
-        color: form.value.color
+        car: form.value.car
       }
     })
     

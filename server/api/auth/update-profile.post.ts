@@ -10,22 +10,34 @@ export default defineEventHandler(async (event) => {
     }
 
     const body = await readBody(event)
-    const { display_name, avatar_url, color } = body
+    const { display_name, avatar_url, car } = body
 
     // Validation
     if (display_name && display_name.trim().length === 0) {
       return { success: false, error: 'Tên hiển thị không được để trống' }
     }
 
-    if (color && !/^#[0-9A-Fa-f]{6}$/.test(color)) {
-      return { success: false, error: 'Màu không hợp lệ (phải là hex color như #3B82F6)' }
+    // Validate car selection (must be one of the available cars)
+    const availableCars = [
+      'biteracer.svg', 'candycane_free.svg', 'candycorn_free.svg', 'car-icon.svg',
+      'fall_2023_acorn-free.svg', 'fall_2023_fallcar-free.svg', 'fall_2023_falltruck-free.svg',
+      'free-rocketship.svg', 'lunar-basic-design-free.svg', 'lunar-basic-tiger-free.svg',
+      'lunar-drag-gold.svg', 'lunar-drag-red.svg', 'lunar-drag-tiger.svg',
+      'mindracerEmoji-free.svg', 'penguins-typingstats_free.svg', 'premium-drag-blue.svg',
+      'premium-drag-fire.svg', 'premium-drag-green.svg', 'premium-drag-pink.svg',
+      'premium-drag-red.svg', 'premium-drag-water.svg', 'premium-earth.svg',
+      'premium-fire.svg', 'spring-flowers2-free.svg'
+    ]
+
+    if (car && !availableCars.includes(car)) {
+      return { success: false, error: 'Xe không hợp lệ' }
     }
 
     // Update profile
     const updated = await updateUserProfile(user.id, {
       display_name: display_name?.trim(),
       avatar_url: avatar_url?.trim(),
-      color: color?.trim()
+      car: car?.trim()
     })
 
     if (!updated) {

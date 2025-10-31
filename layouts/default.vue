@@ -7,12 +7,14 @@
           to="/profile"
           class="flex items-center gap-2 px-4 py-2 bg-white rounded-lg shadow hover:shadow-md transition"
         >
-          <div 
-            class="w-8 h-8 rounded-full flex items-center justify-center text-white font-semibold"
-            :style="{ backgroundColor: user.color }"
-          >
-            {{ user.username[0].toUpperCase() }}
-          </div>
+          <img 
+            :src="'/car/' + (user.car || 'car-icon.svg')" 
+            :class="[
+              'w-8 h-8 object-contain',
+              (user.car || 'car-icon.svg') === 'car-icon.svg' ? 'transform scale-x-[-1]' : ''
+            ]"
+            :alt="'User avatar'"
+          />
           <span class="font-medium">{{ user.display_name || user.username }}</span>
         </NuxtLink>
         <button

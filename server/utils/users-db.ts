@@ -88,7 +88,7 @@ export interface User {
   password_hash: string;
   display_name: string | null;
   avatar_url: string | null;
-  color: string;
+  car: string;
   created_at: string;
   updated_at: string;
 }
@@ -99,7 +99,7 @@ export interface UserPublic {
   email: string;
   display_name: string | null;
   avatar_url: string | null;
-  color: string;
+  car: string;
   created_at: string;
 }
 
@@ -207,7 +207,7 @@ export async function updateUserProfile(
   updates: {
     display_name?: string;
     avatar_url?: string;
-    color?: string;
+    car?: string;
   }
 ): Promise<UserPublic | null> {
   const escapedUserId = userId.replace(/'/g, "''");
@@ -223,9 +223,9 @@ export async function updateUserProfile(
     setParts.push(`avatar_url = '${escaped}'`);
   }
   
-  if (updates.color !== undefined) {
-    const escaped = updates.color.replace(/'/g, "''");
-    setParts.push(`color = '${escaped}'`);
+  if (updates.car !== undefined) {
+    const escaped = updates.car.replace(/'/g, "''");
+    setParts.push(`car = '${escaped}'`);
   }
   
   if (setParts.length === 0) {
@@ -272,7 +272,7 @@ export function toPublicUser(user: User): UserPublic {
     email: user.email,
     display_name: user.display_name,
     avatar_url: user.avatar_url,
-    color: user.color,
+    car: user.car,
     created_at: user.created_at
   };
 }

@@ -6,7 +6,7 @@ export type User = {
   email: string
   display_name: string | null
   avatar_url: string | null
-  color: string
+  car: string
   created_at: string
 }
 

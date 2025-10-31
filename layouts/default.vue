@@ -22,8 +22,8 @@
           Đăng xuất
         </button>
       </div>
-      <!-- Chỉ hiển thị login/register buttons khi KHÔNG ở trang index -->
-      <div v-else-if="$route.name !== 'index'" class="flex gap-2">
+      <!-- Hiển thị login/register buttons khi chưa đăng nhập và không ở trang login/register -->
+      <div v-else-if="!['login', 'register'].includes($route.name)" class="flex items-center gap-4">
         <NuxtLink
           to="/login"
           class="px-4 py-2 text-white bg-blue-600 rounded-lg hover:bg-blue-700"

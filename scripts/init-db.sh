@@ -29,11 +29,12 @@ else
     echo "⚠️  Typing history database already exists"
 fi
 
-# Khởi tạo users database
+# Khởi tạo users database với tất cả migrations
 if [ ! -f "server/db/users.sqlite" ]; then
     echo "Creating users database..."
     sqlite3 server/db/users.sqlite < server/migrations/06-users.sql
-    echo "✅ Users database created"
+    sqlite3 server/db/users.sqlite < server/migrations/10-create-user-progress.sql
+    echo "✅ Users database created with all migrations"
 else
     echo "⚠️  Users database already exists"
 fi

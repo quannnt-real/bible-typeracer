@@ -13,6 +13,9 @@
   },
   "licence": "MIT",
   "private": true,
+  "engines": {
+    "node": "18.x"
+  },
   "scripts": {
     "build": "nuxt build",
     "dev": "nuxt dev",

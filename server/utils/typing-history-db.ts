@@ -1,86 +1,4 @@
-import { exec } from 'child_process';
-import { promisify } from 'util';
-import path from 'path';
-import fs from 'fs';
-
-const execAsync = promisify(exec);
-
-const DB_PATH = path.join(process.cwd(), 'server', 'db', 'typing-history.sqlite');
-const MIGRATION_PATH = path.join(process.cwd(), 'server', 'migrations', '05-typing-history.sql');
-
-// Khởi tạo database nếu chưa tồn tại
-async function initializeDatabase() {
-  const dbDir = path.dirname(DB_PATH);
-  
-  // Tạo thư mục db nếu chưa tồn tại
-  if (!fs.existsSync(dbDir)) {
-    fs.mkdirSync(dbDir, { recursive: true });
-  }
-  
-  // Kiểm tra xem database đã tồn tại chưa
-  if (!fs.existsSync(DB_PATH)) {
-    console.log('Creating typing history database...');
-    
-    // Đọc migration file
-    const migrationSql = fs.readFileSync(MIGRATION_PATH, 'utf-8');
-    
-    // Thực thi migration
-    const escapedSql = migrationSql.replace(/"/g, '\\"').replace(/\n/g, ' ');
-    await execAsync(`sqlite3 "${DB_PATH}" "${escapedSql}"`);
-    
-    console.log('Typing history database created successfully');
-  }
-}
-
-/**
- * Thực thi câu lệnh SQL và trả về kết quả dạng JSON
- */
-export async function queryTypingHistoryDatabase<T = any>(sql: string): Promise<T[]> {
-  try {
-    await initializeDatabase();
-    
-    const escapedSql = sql.replace(/"/g, '\\"');
-    const command = `sqlite3 "${DB_PATH}" -json "${escapedSql}"`;
-    
-    const { stdout, stderr } = await execAsync(command);
-    
-    if (stderr) {
-      console.error('SQLite error:', stderr);
-      return [];
-    }
-    
-    if (!stdout.trim()) {
-      return [];
-    }
-    
-    return JSON.parse(stdout);
-  } catch (error) {
-    console.error('Database query error:', error);
-    return [];
-  }
-}
-
-/**
- * Thực thi câu lệnh SQL không trả về kết quả (INSERT, UPDATE, DELETE)
- */
-async function executeTypingHistoryCommand(sql: string): Promise<void> {
-  try {
-    await initializeDatabase();
-    
-    const escapedSql = sql.replace(/"/g, '\\"');
-    const command = `sqlite3 "${DB_PATH}" "${escapedSql}"`;
-    
-    const { stderr } = await execAsync(command);
-    
-    if (stderr) {
-      console.error('SQLite error:', stderr);
-      throw new Error(stderr);
-    }
-  } catch (error) {
-    console.error('Database command error:', error);
-    throw error;
-  }
-}
+import { getTursoClient } from './turso';
 
 export interface TypingHistory {
   id: string;
@@ -96,6 +14,15 @@ export interface TypingHistory {
 }
 
 /**
+ * Query helper for typing_history table
+ */
+export async function queryTypingHistoryDatabase<T = any>(sql: string, args: any[] = []): Promise<T[]> {
+  const client = getTursoClient();
+  const result = await client.execute({ sql, args });
+  return result.rows as unknown as T[];
+}
+
+/**
  * Kiểm tra xem đoạn văn đã được gõ bao nhiêu lần (theo user)
  */
 export async function checkTypingHistory(
@@ -105,33 +32,41 @@ export async function checkTypingHistory(
   verseStart?: number,
   verseEnd?: number
 ): Promise<{ exists: boolean; count: number; history?: TypingHistory }> {
-  let sql = `SELECT * FROM typing_history WHERE book_id = ${bookId} AND chapter = ${chapter}`;
+  const client = getTursoClient();
   
-  // Filter by user_id if provided
+  let sql = 'SELECT * FROM typing_history WHERE book_id = ? AND chapter = ?';
+  const args: any[] = [bookId, chapter];
+  
+  // Filter by user_id
   if (userId) {
-    sql += ` AND user_id = '${userId}'`;
+    sql += ' AND user_id = ?';
+    args.push(userId);
   } else {
-    sql += ` AND user_id IS NULL`;
+    sql += ' AND user_id IS NULL';
   }
   
+  // Filter by verse range
   if (verseStart !== undefined && verseStart !== null) {
-    sql += ` AND verse_start = ${verseStart}`;
+    sql += ' AND verse_start = ?';
+    args.push(verseStart);
     if (verseEnd !== undefined && verseEnd !== null) {
-      sql += ` AND verse_end = ${verseEnd}`;
+      sql += ' AND verse_end = ?';
+      args.push(verseEnd);
     } else {
-      sql += ` AND verse_end IS NULL`;
+      sql += ' AND verse_end IS NULL';
     }
   } else {
-    sql += ` AND verse_start IS NULL AND verse_end IS NULL`;
+    sql += ' AND verse_start IS NULL AND verse_end IS NULL';
   }
   
-  const result = await queryTypingHistoryDatabase<TypingHistory>(sql);
+  const result = await client.execute({ sql, args });
+  const history = result.rows[0] as unknown as TypingHistory;
   
-  if (result.length > 0) {
+  if (history) {
     return {
       exists: true,
-      count: result[0].times_typed,
-      history: result[0]
+      count: history.times_typed,
+      history
     };
   }
   
@@ -150,45 +85,53 @@ export async function recordTypingHistory(
   verseEnd?: number,
   wpm?: number
 ): Promise<void> {
+  const client = getTursoClient();
+  
   // Kiểm tra xem đã tồn tại chưa
   const existing = await checkTypingHistory(bookId, chapter, userId, verseStart, verseEnd);
   
   if (existing.exists && existing.history) {
-    // Cập nhật số lần gõ và best_wpm nếu cao hơn
+    // Cập nhật
     const currentBestWpm = existing.history.best_wpm || 0;
     const newBestWpm = wpm && wpm > currentBestWpm ? wpm : currentBestWpm;
     
-    const sql = `UPDATE typing_history 
-                 SET times_typed = ${existing.count + 1}, 
-                     last_typed_at = datetime('now'),
-                     best_wpm = ${newBestWpm}
-                 WHERE id = '${existing.history.id}'`;
-    await executeTypingHistoryCommand(sql);
+    await client.execute({
+      sql: `UPDATE typing_history 
+            SET times_typed = ?, 
+                last_typed_at = datetime('now'),
+                best_wpm = ?
+            WHERE id = ?`,
+      args: [existing.count + 1, newBestWpm, existing.history.id],
+    });
   } else {
     // Thêm mới
-    const verseStartValue = verseStart !== undefined && verseStart !== null ? verseStart : 'NULL';
-    const verseEndValue = verseEnd !== undefined && verseEnd !== null ? verseEnd : 'NULL';
-    const userIdValue = userId ? `'${userId}'` : 'NULL';
-    const wpmValue = wpm || 0;
-    
-    const sql = `INSERT INTO typing_history(id, book_id, chapter, verse_start, verse_end, times_typed, user_id, best_wpm)
-                 VALUES('${id}', ${bookId}, ${chapter}, ${verseStartValue}, ${verseEndValue}, 1, ${userIdValue}, ${wpmValue})`;
-    await executeTypingHistoryCommand(sql);
+    await client.execute({
+      sql: `INSERT INTO typing_history(id, book_id, chapter, verse_start, verse_end, times_typed, user_id, best_wpm)
+            VALUES(?, ?, ?, ?, ?, 1, ?, ?)`,
+      args: [id, bookId, chapter, verseStart || null, verseEnd || null, userId || null, wpm || 0],
+    });
   }
 }
 
 /**
- * Lấy lịch sử gõ gần đây (tất cả hoặc theo user)
+ * Lấy lịch sử gõ gần đây
  */
 export async function getRecentTypingHistory(limit: number = 10, userId?: string): Promise<TypingHistory[]> {
+  const client = getTursoClient();
+  
   if (userId) {
-    return queryTypingHistoryDatabase<TypingHistory>(
-      `SELECT * FROM typing_history WHERE user_id = '${userId}' ORDER BY last_typed_at DESC LIMIT ${limit}`
-    );
+    const result = await client.execute({
+      sql: 'SELECT * FROM typing_history WHERE user_id = ? ORDER BY last_typed_at DESC LIMIT ?',
+      args: [userId, limit],
+    });
+    return result.rows as unknown as TypingHistory[];
   }
-  return queryTypingHistoryDatabase<TypingHistory>(
-    `SELECT * FROM typing_history ORDER BY last_typed_at DESC LIMIT ${limit}`
-  );
+  
+  const result = await client.execute({
+    sql: 'SELECT * FROM typing_history ORDER BY last_typed_at DESC LIMIT ?',
+    args: [limit],
+  });
+  return result.rows as unknown as TypingHistory[];
 }
 
 /**
@@ -199,23 +142,25 @@ export async function getTypingHistoryStats(): Promise<{
   totalTypings: number;
   mostTypedText?: TypingHistory;
 }> {
-  const statsResult = await queryTypingHistoryDatabase<{
-    total_texts: number;
-    total_typings: number;
-  }>(`
+  const client = getTursoClient();
+  
+  const statsResult = await client.execute(`
     SELECT 
       COUNT(*) as total_texts,
       SUM(times_typed) as total_typings
     FROM typing_history
   `);
   
-  const mostTypedResult = await queryTypingHistoryDatabase<TypingHistory>(
-    `SELECT * FROM typing_history ORDER BY times_typed DESC LIMIT 1`
+  const mostTypedResult = await client.execute(
+    'SELECT * FROM typing_history ORDER BY times_typed DESC LIMIT 1'
   );
   
+  const stats = statsResult.rows[0] as unknown as { total_texts: number; total_typings: number };
+  const mostTyped = mostTypedResult.rows[0] as unknown as TypingHistory;
+  
   return {
-    totalTexts: statsResult[0]?.total_texts || 0,
-    totalTypings: statsResult[0]?.total_typings || 0,
-    mostTypedText: mostTypedResult[0]
+    totalTexts: stats?.total_texts || 0,
+    totalTypings: stats?.total_typings || 0,
+    mostTypedText: mostTyped
   };
 }

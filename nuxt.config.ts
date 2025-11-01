@@ -29,6 +29,10 @@ export default defineNuxtConfig({
   // Runtime config
   runtimeConfig: {
     // Private keys (only available on server-side)
+    tursoUrl: process.env.TURSO_DATABASE_URL || '',
+    tursoAuthToken: process.env.TURSO_AUTH_TOKEN || '',
+    jwtSecret: process.env.JWT_SECRET || 'default-secret-key',
+    
     // Public keys that are exposed to client-side
     public: {
       apiBase: process.env.API_BASE || '/api'

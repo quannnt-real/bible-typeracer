@@ -1,10 +1,4 @@
-import { exec } from 'child_process';
-import { promisify } from 'util';
-import path from 'path';
-
-const execAsync = promisify(exec);
-
-const DB_PATH = path.join(process.cwd(), 'server', 'db', 'VIE2010.sqlite');
+import { getTursoClient } from './turso';
 
 export interface Book {
   id: number;
@@ -22,59 +16,126 @@ export interface Verse {
 }
 
 /**
- * Thực thi câu lệnh SQL và trả về kết quả dạng JSON
- */
-export async function queryDatabase<T = any>(sql: string): Promise<T[]> {
-  try {
-    // Escape quotes trong SQL
-    const escapedSql = sql.replace(/"/g, '\\"');
-    
-    // Sử dụng sqlite3 CLI với output mode JSON
-    const command = `sqlite3 "${DB_PATH}" -json "${escapedSql}"`;
-    
-    const { stdout, stderr } = await execAsync(command);
-    
-    if (stderr) {
-      console.error('SQLite error:', stderr);
-      return [];
-    }
-    
-    if (!stdout.trim()) {
-      return [];
-    }
-    
-    return JSON.parse(stdout);
-  } catch (error) {
-    console.error('Database query error:', error);
-    return [];
-  }
-}
-
-/**
- * Lấy tất cả sách trong Kinh Thánh
+ * Lấy tất cả các sách trong Kinh Thánh
  */
 export async function getAllBooks(): Promise<Book[]> {
-  return queryDatabase<Book>('SELECT * FROM book ORDER BY id');
+  const client = getTursoClient();
+  const result = await client.execute('SELECT * FROM book ORDER BY id');
+  return result.rows as unknown as Book[];
 }
 
 /**
- * Lấy số chapter của một sách
+ * Lấy thông tin sách theo ID
+ */
+export async function getBookById(bookId: number): Promise<Book | null> {
+  const client = getTursoClient();
+  const result = await client.execute({
+    sql: 'SELECT * FROM book WHERE id = ?',
+    args: [bookId],
+  });
+  return (result.rows[0] as unknown as Book) || null;
+}
+
+/**
+ * Lấy tất cả các câu trong một chương
+ */
+export async function getVersesByChapter(bookId: number, chapter: number): Promise<Verse[]> {
+  const client = getTursoClient();
+  const result = await client.execute({
+    sql: 'SELECT * FROM verse WHERE book_id = ? AND chapter = ? ORDER BY verse',
+    args: [bookId, chapter],
+  });
+  return result.rows as unknown as Verse[];
+}
+
+/**
+ * Lấy một câu cụ thể
+ */
+export async function getVerse(bookId: number, chapter: number, verseNum: number): Promise<Verse | null> {
+  const client = getTursoClient();
+  const result = await client.execute({
+    sql: 'SELECT * FROM verse WHERE book_id = ? AND chapter = ? AND verse = ?',
+    args: [bookId, chapter, verseNum],
+  });
+  return (result.rows[0] as unknown as Verse) || null;
+}
+
+/**
+ * Lấy một đoạn văn (nhiều câu liên tiếp)
+ */
+export async function getVerseRange(
+  bookId: number,
+  chapter: number,
+  startVerse: number,
+  endVerse: number
+): Promise<Verse[]> {
+  const client = getTursoClient();
+  const result = await client.execute({
+    sql: 'SELECT * FROM verse WHERE book_id = ? AND chapter = ? AND verse BETWEEN ? AND ? ORDER BY verse',
+    args: [bookId, chapter, startVerse, endVerse],
+  });
+  return result.rows as unknown as Verse[];
+}
+
+/**
+ * Lấy câu ngẫu nhiên
+ */
+export async function getRandomVerse(): Promise<Verse | null> {
+  const client = getTursoClient();
+  const result = await client.execute('SELECT * FROM verse ORDER BY RANDOM() LIMIT 1');
+  return (result.rows[0] as unknown as Verse) || null;
+}
+
+/**
+ * Đếm số chương trong một sách
+ */
+export async function countChaptersInBook(bookId: number): Promise<number> {
+  const client = getTursoClient();
+  const result = await client.execute({
+    sql: 'SELECT MAX(chapter) as max_chapter FROM verse WHERE book_id = ?',
+    args: [bookId],
+  });
+  const row = result.rows[0] as unknown as { max_chapter: number };
+  return row?.max_chapter || 0;
+}
+
+/**
+ * Đếm số câu trong một chương
+ */
+export async function countVersesInChapter(bookId: number, chapter: number): Promise<number> {
+  const client = getTursoClient();
+  const result = await client.execute({
+    sql: 'SELECT COUNT(*) as count FROM verse WHERE book_id = ? AND chapter = ?',
+    args: [bookId, chapter],
+  });
+  const row = result.rows[0] as unknown as { count: number };
+  return row?.count || 0;
+}
+
+/**
+ * Tìm kiếm câu theo văn bản
+ */
+export async function searchVerses(searchText: string, limit: number = 20): Promise<Verse[]> {
+  const client = getTursoClient();
+  const result = await client.execute({
+    sql: 'SELECT * FROM verse WHERE text LIKE ? LIMIT ?',
+    args: [`%${searchText}%`, limit],
+  });
+  return result.rows as unknown as Verse[];
+}
+
+/**
+ * Alias cho countChaptersInBook (compatibility)
  */
 export async function getChapterCount(bookId: number): Promise<number> {
-  const result = await queryDatabase<{ max_chapter: number }>(
-    `SELECT MAX(chapter) as max_chapter FROM verse WHERE book_id = ${bookId}`
-  );
-  return result[0]?.max_chapter || 0;
+  return countChaptersInBook(bookId);
 }
 
 /**
- * Lấy số câu của một chương
+ * Lấy số câu của một chương (alias cho countVersesInChapter)
  */
 export async function getVerseCount(bookId: number, chapter: number): Promise<number> {
-  const result = await queryDatabase<{ max_verse: number }>(
-    `SELECT MAX(verse) as max_verse FROM verse WHERE book_id = ${bookId} AND chapter = ${chapter}`
-  );
-  return result[0]?.max_verse || 0;
+  return countVersesInChapter(bookId, chapter);
 }
 
 /**
@@ -86,19 +147,14 @@ export async function getVerses(
   verseStart?: number,
   verseEnd?: number
 ): Promise<Verse[]> {
-  let sql = `SELECT * FROM verse WHERE book_id = ${bookId} AND chapter = ${chapter}`;
-  
-  if (verseStart !== undefined) {
-    if (verseEnd !== undefined) {
-      sql += ` AND verse >= ${verseStart} AND verse <= ${verseEnd}`;
-    } else {
-      sql += ` AND verse = ${verseStart}`;
-    }
+  if (verseStart !== undefined && verseEnd !== undefined) {
+    return getVerseRange(bookId, chapter, verseStart, verseEnd);
+  } else if (verseStart !== undefined) {
+    const verse = await getVerse(bookId, chapter, verseStart);
+    return verse ? [verse] : [];
+  } else {
+    return getVersesByChapter(bookId, chapter);
   }
-  
-  sql += ' ORDER BY verse';
-  
-  return queryDatabase<Verse>(sql);
 }
 
 /**

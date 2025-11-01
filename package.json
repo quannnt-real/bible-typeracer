@@ -14,7 +14,7 @@
   "licence": "MIT",
   "private": true,
   "engines": {
-    "node": "18.x"
+    "node": "20.x"
   },
   "scripts": {
     "build": "nuxt build",
@@ -37,6 +37,6 @@
     "@types/bcryptjs": "^2.4.6",
     "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "20",
-    "nuxt": "3.5.0"
+    "nuxt": "^3.13.0"
   }
 }

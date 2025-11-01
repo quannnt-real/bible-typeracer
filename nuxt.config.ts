@@ -18,12 +18,9 @@ export default defineNuxtConfig({
     '/api/**': { prerender: false },
   },
 
-  // Nitro config cho Node.js hosting
+  // Nitro config cho Vercel
   nitro: {
-    preset: 'node-server',
-    output: {
-      dir: '.output'
-    }
+    preset: 'vercel'
   },
 
   // Runtime config
